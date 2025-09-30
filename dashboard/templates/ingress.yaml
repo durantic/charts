@@ -1,0 +1,108 @@
+{{/*
+Durantic Dashboard Ingress Template
+
+Features:
+- Multi-version API support (networking.k8s.io/v1, v1beta1, extensions/v1beta1)
+- Automatic nginx ingress class defaulting
+- Built-in SSL redirect and proxy configurations
+- CORS support for frontend-backend communication
+- cert-manager integration with cluster issuer support
+- Configurable proxy timeouts and body size limits
+- Multiple hosts and paths support
+- Proper labels and selectors for service routing
+
+Usage:
+  Set ingress.enabled=true and configure hosts, TLS, and other options in values.yaml
+  See values-example.yaml for comprehensive configuration examples
+*/}}
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "dashboard.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+{{- $ingressSupportsIngressClassName := eq (include "dashboard.ingress.supportsIngressClassName" .) "true" -}}
+{{- $ingressSupportsPathType := eq (include "dashboard.ingress.supportsPathType" .) "true" -}}
+{{- $ingressApiVersion := include "dashboard.ingress.apiVersion" . -}}
+{{- $ingressClassName := .Values.ingress.className | default "nginx" }}
+apiVersion: {{ $ingressApiVersion }}
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+  annotations:
+    # Set default nginx ingress class if not specified and legacy annotation is not present
+    {{- if and (not $ingressSupportsIngressClassName) (not (hasKey .Values.ingress.annotations "kubernetes.io/ingress.class")) }}
+    kubernetes.io/ingress.class: {{ $ingressClassName | quote }}
+    {{- end }}
+
+    # Default nginx annotations for dashboard functionality
+    nginx.ingress.kubernetes.io/ssl-redirect: {{ .Values.ingress.sslRedirect | default "true" | quote }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: {{ .Values.ingress.forceSSLRedirect | default "false" | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.proxyBodySize | default "10m" | quote }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyReadTimeout | default "600" | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxySendTimeout | default "600" | quote }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ .Values.ingress.proxyConnectTimeout | default "60" | quote }}
+
+    {{- if .Values.ingress.enableCORS }}
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: {{ .Values.ingress.corsAllowOrigin | default "*" | quote }}
+    nginx.ingress.kubernetes.io/cors-allow-methods: {{ .Values.ingress.corsAllowMethods | default "GET, PUT, POST, DELETE, PATCH, OPTIONS" | quote }}
+    nginx.ingress.kubernetes.io/cors-allow-headers: {{ .Values.ingress.corsAllowHeaders | default "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization" | quote }}
+    nginx.ingress.kubernetes.io/cors-expose-headers: {{ .Values.ingress.corsExposeHeaders | default "Content-Length,Content-Range" | quote }}
+    nginx.ingress.kubernetes.io/cors-max-age: {{ .Values.ingress.corsMaxAge | default "1728000" | quote }}
+    nginx.ingress.kubernetes.io/cors-allow-credentials: {{ .Values.ingress.corsAllowCredentials | default "true" | quote }}
+    {{- end }}
+
+    {{- if and .Values.ingress.tls .Values.ingress.certManager.enabled }}
+    # cert-manager annotations
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.issuer | required "ingress.certManager.issuer is required when cert-manager is enabled" | quote }}
+    {{- if .Values.ingress.certManager.acmeChallenge }}
+    cert-manager.io/acme-challenge-type: {{ .Values.ingress.certManager.acmeChallenge | quote }}
+    {{- end }}
+    {{- if .Values.ingress.certManager.acmeDNS01Provider }}
+    cert-manager.io/acme-dns01-provider: {{ .Values.ingress.certManager.acmeDNS01Provider | quote }}
+    {{- end }}
+    {{- end }}
+
+    # Custom user annotations (these will override defaults if specified)
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if $ingressSupportsIngressClassName }}
+  ingressClassName: {{ $ingressClassName }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if $ingressSupportsPathType }}
+            pathType: {{ .pathType | default "Prefix" }}
+            {{- end }}
+            backend:
+              {{- if eq $ingressApiVersion "networking.k8s.io/v1" }}
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+              {{- else }}
+              serviceName: {{ $fullName }}
+              servicePort: {{ $svcPort }}
+              {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

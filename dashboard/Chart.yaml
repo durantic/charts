@@ -1,0 +1,23 @@
+apiVersion: v2
+name: dashboard
+description: Durantic Dashboard - Web frontend for Durantic control plane
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+maintainers:
+  - name: Durantic Team
+    email: team@durantic.io
+
+keywords:
+  - durantic
+  - dashboard
+  - frontend
+  - react
+
+home: https://github.com/durantic/dashboard
+sources:
+  - https://github.com/durantic/dashboard
+
+annotations:
+  category: Infrastructure

@@ -1,0 +1,276 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.fullname" . }}-config
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    events {
+        worker_connections {{ .Values.nginx.workerConnections | default 1024 }};
+        use epoll;
+        multi_accept on;
+    }
+
+    http {
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        # Buffer settings for performance
+        proxy_buffering on;
+        proxy_buffer_size {{ .Values.nginx.proxy.bufferSize | default "4k" }};
+        proxy_buffers {{ .Values.nginx.proxy.buffers | default "8 4k" }};
+        proxy_busy_buffers_size {{ .Values.nginx.proxy.busyBuffersSize | default "8k" }};
+        client_body_buffer_size {{ .Values.nginx.clientBodyBufferSize | default "128k" }};
+        client_header_buffer_size {{ .Values.nginx.clientHeaderBufferSize | default "1k" }};
+        large_client_header_buffers {{ .Values.nginx.largeClientHeaderBuffers | default "4 4k" }};
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers on;
+        access_log /dev/stdout;
+        error_log /dev/stderr;
+
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_proxied any;
+        gzip_comp_level 6;
+        gzip_min_length 1000;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/json
+            application/javascript
+            application/xml+rss
+            application/atom+xml
+            image/svg+xml
+            application/wasm;
+
+        # Rate limiting
+        {{- if .Values.nginx.rateLimiting.enabled }}
+        limit_req_zone $binary_remote_addr zone=api:{{ .Values.nginx.rateLimiting.zoneSize | default "10m" }} rate={{ .Values.nginx.rateLimiting.rate | default "10r/s" }};
+        limit_req_zone $binary_remote_addr zone=general:{{ .Values.nginx.rateLimiting.zoneSize | default "10m" }} rate={{ .Values.nginx.rateLimiting.generalRate | default "100r/s" }};
+        {{- end }}
+
+        # Upstream for backend service
+        upstream backend {
+            {{- if and .Values.backend.serviceName (not .Values.backend.useExternalUrl) }}
+            server {{ .Values.backend.serviceName }}:{{ .Values.backend.servicePort | default 8000 }};
+            {{- else }}
+            server {{ .Values.backend.serviceName | default "controlplane-durantic" }}:{{ .Values.backend.servicePort | default 8000 }};
+            {{- end }}
+            keepalive {{ .Values.nginx.upstream.keepalive | default 32 }};
+        }
+
+        # Kubernetes internal DNS resolver (using CoreDNS IP)
+        resolver {{ .Values.nginx.resolver | default "10.43.0.10" }} valid=10s ipv6=off;
+        resolver_timeout 5s;
+
+        # Map for connection upgrade (WebSocket support)
+        map $http_upgrade $connection_upgrade {
+            default upgrade;
+            '' close;
+        }
+
+        # HTTP server - redirect all traffic to HTTPS except health check
+        server {
+            listen 80;
+            server_name _;
+            client_max_body_size {{ .Values.nginx.clientMaxBodySize | default "1G" }};
+
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+
+            {{- if not .Values.tls.enabled }}
+            # Serve dashboard directly on HTTP if TLS is disabled
+            root /usr/share/nginx/html;
+            index index.html;
+
+            # API proxy with WebSocket support
+            location ~ ^/(api/|admin/|_auth/|auth/) {
+                {{- if .Values.nginx.rateLimiting.enabled }}
+                limit_req zone=api burst={{ .Values.nginx.rateLimiting.burst | default 20 }} nodelay;
+                {{- end }}
+
+                proxy_pass http://backend;
+                proxy_http_version 1.1;
+
+                # Standard proxy headers
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header X-Forwarded-Host $server_name;
+                proxy_set_header X-Forwarded-Port $server_port;
+
+                # WebSocket support
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+
+                # Disable buffering for real-time applications
+                proxy_buffering {{ .Values.nginx.proxy.disableBuffering | ternary "off" "on" }};
+                proxy_cache_bypass $http_upgrade;
+                proxy_redirect off;
+
+                # Timeouts
+                proxy_connect_timeout {{ .Values.nginx.proxy.connectTimeout | default "60s" }};
+                proxy_send_timeout {{ .Values.nginx.proxy.sendTimeout | default "60s" }};
+                proxy_read_timeout {{ .Values.nginx.proxy.readTimeout | default "60s" }};
+
+                # Keep-alive
+                proxy_socket_keepalive on;
+            }
+
+            # Dashboard static assets
+            location ~ ^/(static/|_next/|favicon\.ico|manifest\.json) {
+                try_files $uri =404;
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                access_log off;
+
+                # Security headers for static files
+                add_header X-Content-Type-Options "nosniff" always;
+            }
+
+            # Dashboard routes - handle client-side routing
+            location / {
+                {{- if .Values.nginx.rateLimiting.enabled }}
+                limit_req zone=general burst={{ .Values.nginx.rateLimiting.generalBurst | default 100 }} nodelay;
+                {{- end }}
+
+                try_files $uri $uri/ /index.html;
+                expires -1;
+                add_header Cache-Control "no-cache, no-store, must-revalidate";
+
+                # Security headers
+                add_header X-Frame-Options "SAMEORIGIN" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-XSS-Protection "1; mode=block" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            }
+
+            {{- else }}
+            # Redirect to HTTPS when TLS is enabled
+            location / {
+                return 301 https://$server_name$request_uri;
+            }
+            {{- end }}
+
+            # Deny access to hidden files
+            location ~ /\. {
+                deny all;
+            }
+        }
+
+        {{- if .Values.tls.enabled }}
+        # HTTPS server with TLS
+        server {
+            listen 443 ssl http2;
+            server_name {{ .Values.nginx.serverName | default "_" }};
+            client_max_body_size {{ .Values.nginx.clientMaxBodySize | default "1G" }};
+
+            # Static files root for dashboard
+            root /usr/share/nginx/html;
+            index index.html;
+
+            # SSL/TLS Configuration
+            ssl_certificate /etc/nginx/ssl/tls.crt;
+            ssl_certificate_key /etc/nginx/ssl/tls.key;
+
+            # Strong SSL configuration
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+            ssl_prefer_server_ciphers off;
+
+            # SSL session configuration
+            ssl_session_timeout 1d;
+            ssl_session_cache shared:SSL:50m;
+            ssl_session_tickets off;
+
+            # Security headers
+            add_header Strict-Transport-Security "max-age=63072000" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+            # Logging
+            access_log /dev/stdout;
+            error_log /dev/stderr;
+
+            # API proxy with WebSocket support
+            location ~ ^/(api/|admin/|_auth/|auth/) {
+                {{- if .Values.nginx.rateLimiting.enabled }}
+                limit_req zone=api burst={{ .Values.nginx.rateLimiting.burst | default 20 }} nodelay;
+                {{- end }}
+
+                proxy_pass http://backend;
+                proxy_http_version 1.1;
+
+                # Standard proxy headers
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header X-Forwarded-Host $server_name;
+                proxy_set_header X-Forwarded-Port $server_port;
+
+                # WebSocket support
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+
+                # Disable buffering for real-time applications
+                proxy_buffering {{ .Values.nginx.proxy.disableBuffering | ternary "off" "on" }};
+                proxy_cache_bypass $http_upgrade;
+                proxy_redirect off;
+
+                # Timeouts
+                proxy_connect_timeout {{ .Values.nginx.proxy.connectTimeout | default "60s" }};
+                proxy_send_timeout {{ .Values.nginx.proxy.sendTimeout | default "60s" }};
+                proxy_read_timeout {{ .Values.nginx.proxy.readTimeout | default "60s" }};
+
+                # Keep-alive
+                proxy_socket_keepalive on;
+            }
+
+            # Dashboard static assets - serve from filesystem with long cache
+            location ~ ^/(static/|_next/|favicon\.ico|manifest\.json) {
+                try_files $uri =404;
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                access_log off;
+
+                # Security headers for static files
+                add_header X-Content-Type-Options "nosniff" always;
+            }
+
+            # Dashboard routes - handle client-side routing
+            location / {
+                {{- if .Values.nginx.rateLimiting.enabled }}
+                limit_req zone=general burst={{ .Values.nginx.rateLimiting.generalBurst | default 100 }} nodelay;
+                {{- end }}
+
+                try_files $uri $uri/ /index.html;
+                expires -1;
+                add_header Cache-Control "no-cache, no-store, must-revalidate";
+            }
+
+            # Deny access to hidden files
+            location ~ /\. {
+                deny all;
+            }
+        }
+        {{- end }}
+    }

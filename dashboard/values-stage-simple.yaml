@@ -1,0 +1,28 @@
+# Minimal staging overrides - only what's different from defaults
+# This is a simpler alternative to values-stage.yaml
+
+image:
+  repository: ghcr.io/durantic/dashboard
+  tag: main
+
+imagePullSecrets:
+  - name: ghcr-secret
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: dashboard.stage.durantic.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dashboard-stage-tls
+      hosts:
+        - dashboard.stage.durantic.dev
+
+backend:
+  serviceName: controlplane-durantic
+  servicePort: 8000

@@ -1,0 +1,146 @@
+# Example values for Durantic Dashboard
+# Copy this file to values.yaml and customize as needed
+
+# Basic configuration
+replicaCount: 2
+
+image:
+  repository: durantic/dashboard
+  tag: "v1.2.3"
+  pullPolicy: Always
+
+# Backend API configuration
+backend:
+  apiUrl: "http://controlplane-web:8000"
+  grpcUrl: "ws://controlplane-grpc:50051"
+
+# Enable TLS
+tls:
+  enabled: true
+  secretName: "dashboard-tls-cert"
+
+# Production resource settings
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# Enable autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Enable ingress with comprehensive configuration
+ingress:
+  enabled: true
+  className: "nginx"
+
+  # SSL and security settings
+  sslRedirect: "true"
+  forceSSLRedirect: "false"
+
+  # Proxy settings for large uploads and improved performance
+  proxyBodySize: "50m"  # Allow larger file uploads
+  proxyReadTimeout: "300"
+  proxySendTimeout: "300"
+  proxyConnectTimeout: "30"
+
+  # Enable CORS for frontend-backend communication
+  enableCORS: true
+  corsAllowOrigin: "https://dashboard.durantic.io"
+  corsAllowCredentials: "true"
+
+  # cert-manager automatic certificate provisioning
+  certManager:
+    enabled: true
+    issuer: "letsencrypt-prod"
+    acmeChallenge: "http01"
+
+  # Custom annotations for advanced configuration
+  annotations:
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # Security headers
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' wss: https:;" always;
+
+  # Multiple hosts and paths
+  hosts:
+    - host: dashboard.durantic.io
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: app.durantic.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+  # TLS configuration with automatic cert-manager certificates
+  tls:
+    - secretName: dashboard-tls-cert
+      hosts:
+        - dashboard.durantic.io
+        - app.durantic.io
+
+# Security configurations
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  capabilities:
+    drop:
+    - ALL
+    add:
+    - CHOWN
+    - SETGID
+    - SETUID
+    - NET_BIND_SERVICE
+
+# Enable pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Node affinity for better distribution
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - dashboard
+        topologyKey: kubernetes.io/hostname
+
+# Environment variables for React app
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: REACT_APP_API_BASE_URL
+    value: "/api"
+  - name: REACT_APP_GRPC_URL
+    value: "wss://dashboard.durantic.io/grpc"
