@@ -1,0 +1,27 @@
+# Minimal values for local installation
+controlPlane:
+  nodeId: "local-dev-node"  # Required: unique identifier for this control plane instance
+
+# Optional: Set resource limits for local development
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Optional: Disable persistence for local testing
+postgresql:
+  primary:
+    persistence:
+      enabled: false
+      
+redis:
+  master:
+    persistence:
+      enabled: false
+      
+minio:
+  persistence:
+    enabled: false

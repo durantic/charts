@@ -1,76 +1,132 @@
-# Production environment values for controlplane
-# This file is automatically updated by CI/CD
-
-image:
-  repository: ghcr.io/durantic/controlplane
-  tag: v1.0.0
-  pullPolicy: IfNotPresent
-
+# Production environment values
 replicaCount: 3
 
 django:
   debug: false
-  allowedHosts: "api.durantic.dev,controlplane-prod,controlplane-prod.production.svc.cluster.local"
-  controlPlaneHost: "api.durantic.dev"
-  csrfTrustedOrigins: "https://api.durantic.dev,https://dashboard.durantic.dev"
-
-  # Database configuration - using existing cluster resources
+  allowedHosts: "durantic.example.com,*.durantic.example.com"
+  
+  # Use external managed services
   database:
-    host: "postgresql-cluster-rw.production.svc.cluster.local"
+    host: "postgres.example.com"
     port: "5432"
-    name: "durantic"
+    name: "durantic_prod"
     user: "durantic"
-    # password: set via secret
-
-  # Redis configuration - using existing cluster resources
+    # password should be set via sealed secrets or external secret manager
+  
   redis:
-    host: "redis-master.production.svc.cluster.local"
+    host: "redis.example.com"
     port: "6379"
-    # password: set via secret
-
-  # S3/MinIO configuration
+    # password should be set via sealed secrets or external secret manager
+  
   s3:
-    endpointUrl: "https://minio.durantic.dev"
+    # MinIO endpoint will be auto-configured
+    endpointUrl: ""  # Auto-configured to use internal MinIO service
     region: "us-east-1"
-    ipxeBucket: "ipxe-builds"
-    osImagesBucket: "os-images"
-    useSSL: true
-    verify: true
-    addressingStyle: "path"
-    urlExpireSeconds: "3600"
-    publicUrl: "https://minio.durantic.dev"
-    # accessKeyId: set via secret
-    # secretAccessKey: set via secret
+    ipxeBucket: "prod-ipxe-builds"
+    osImagesBucket: "prod-os-images"
+    useSSL: false  # Use false for internal cluster communication
+    verify: false  # No need to verify internal certs
+    signatureVersion: "s3v4"
+    addressingStyle: "path"  # MinIO uses path-style addressing
 
 ingress:
   enabled: true
   className: nginx
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
   hosts:
-    - host: api.durantic.dev
+    - host: durantic.example.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: controlplane-prod-tls
+    - secretName: durantic-tls
       hosts:
-        - api.durantic.dev
+        - durantic.example.com
 
-service:
-  type: ClusterIP
-  httpPort: 8000
+grpcIngress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: grpc.durantic.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: durantic-grpc-tls
+      hosts:
+        - grpc.durantic.example.com
+
+# Disable subcharts in production
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# MinIO in production - distributed mode for HA
+minio:
+  enabled: true
+  auth:
+    rootUser: minioadmin
+    # rootPassword should be set via sealed secrets or external secret manager
+  mode: distributed
+  replicas: 4  # Minimum 4 for distributed mode
+  zones: 1
+  drivesPerNode: 1
+  persistence:
+    enabled: true
+    size: 1Ti  # 1TB per node
+    storageClass: "fast-ssd"  # Use your fast storage class
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+  ingress:
+    enabled: true
+    hostname: minio.durantic.example.com
+    ingressClassName: nginx
+    tls: true
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 1
+    limits:
+      memory: 4Gi
+      cpu: 2
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+  # Pod anti-affinity for distribution across nodes
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - minio
+          topologyKey: kubernetes.io/hostname
 
 resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
   requests:
     cpu: 500m
     memory: 1Gi
-  limits:
-    cpu: 2000m
-    memory: 4Gi
 
 autoscaling:
   enabled: true
@@ -79,12 +135,28 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-podDisruptionBudget:
+persistence:
   enabled: true
-  minAvailable: 2
+  storageClass: "gp3"
+  size: 100Gi
 
-# Release metadata (updated by CI/CD)
-releaseMetadata:
-  version: ""
-  releasedAt: ""
-  releasedBy: ""
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+nodeSelector:
+  node-role.kubernetes.io/worker: "true"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - durantic
+        topologyKey: kubernetes.io/hostname

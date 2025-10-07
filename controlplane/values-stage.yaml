@@ -1,18 +1,16 @@
 # Stage environment values for controlplane
-# This file is automatically updated by CI/CD
+# Based on values-dev.yaml but for staging environment
+
+replicaCount: 2
 
 image:
   repository: ghcr.io/durantic/controlplane
   tag: main
   pullPolicy: Always
 
-replicaCount: 2
-
 django:
   debug: false
-  allowedHosts: "api.stage.durantic.dev,controlplane-stage,controlplane-stage.default.svc.cluster.local"
-  controlPlaneHost: "api.stage.durantic.dev"
-  csrfTrustedOrigins: "https://api.stage.durantic.dev,https://dashboard.stage.durantic.dev"
+  allowedHosts: "api.stage.durantic.dev,controlplane-durantic,controlplane-durantic.default.svc.cluster.local"
 
   # Database configuration - using existing cluster resources
   database:
@@ -37,9 +35,6 @@ django:
     useSSL: false
     verify: false
     addressingStyle: "path"
-    urlExpireSeconds: "3600"
-    # accessKeyId: set via secret
-    # secretAccessKey: set via secret
 
 ingress:
   enabled: true
@@ -58,9 +53,15 @@ ingress:
       hosts:
         - api.stage.durantic.dev
 
-service:
-  type: ClusterIP
-  httpPort: 8000
+# Disable subcharts in staging - use existing cluster resources
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+minio:
+  enabled: false
 
 resources:
   requests:
@@ -73,11 +74,5 @@ resources:
 autoscaling:
   enabled: false
 
-podDisruptionBudget:
+persistence:
   enabled: false
-
-# Deployment metadata (updated by CI/CD)
-deploymentMetadata:
-  lastUpdated: ""
-  deployedBy: ""
-  gitCommit: ""

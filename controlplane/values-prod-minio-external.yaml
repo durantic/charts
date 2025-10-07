@@ -1,0 +1,36 @@
+# Production values with MinIO external access
+# This allows clients to download files directly from MinIO
+
+# Include base production values
+# Use with: helm install -f values-prod.yaml -f values-prod-minio-external.yaml
+
+django:
+  s3:
+    # Use the external MinIO URL for generating signed URLs
+    endpointUrl: "https://minio.durantic.example.com"
+    useSSL: true
+    verify: true
+
+# Additional MinIO ingress for API access (not just console)
+minio:
+  ingress:
+    # Console access
+    enabled: true
+    hostname: minio-console.durantic.example.com
+    
+  # API ingress (for S3 API access)
+  apiIngress:
+    enabled: true
+    hostname: minio.durantic.example.com
+    ingressClassName: nginx
+    tls: true
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      # CORS headers for direct browser access
+      nginx.ingress.kubernetes.io/enable-cors: "true"
+      nginx.ingress.kubernetes.io/cors-allow-origin: "https://durantic.example.com"
+      nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, OPTIONS"
+      nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"

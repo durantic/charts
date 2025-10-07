@@ -1,0 +1,48 @@
+# Development environment values
+replicaCount: 1
+
+django:
+  debug: true
+  allowedHosts: "*"
+  # S3 configuration for development with MinIO
+  s3:
+    useSSL: false
+    verify: false
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: durantic-dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      enabled: false  # No persistence in dev
+
+redis:
+  enabled: true
+  master:
+    persistence:
+      enabled: false  # No persistence in dev
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+# MinIO configuration for development
+minio:
+  enabled: true
+  persistence:
+    enabled: false  # No persistence in dev

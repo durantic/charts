@@ -1,0 +1,179 @@
+# Production MinIO High Availability Configuration
+# This provides a complete production-ready MinIO setup
+
+replicaCount: 3
+
+django:
+  debug: false
+  allowedHosts: "durantic.example.com,*.durantic.example.com"
+  
+  # External database and Redis
+  database:
+    host: "postgres.example.com"
+    port: "5432"
+    name: "durantic_prod"
+    user: "durantic"
+    # password via sealed secrets
+  
+  redis:
+    host: "redis.example.com"
+    port: "6379"
+    # password via sealed secrets
+  
+  s3:
+    # Internal endpoint for Django to MinIO communication
+    endpointUrl: ""  # Auto-configured to internal service
+    # Public URL for generating signed URLs that clients can access
+    publicUrl: "https://minio.durantic.example.com"
+    region: "us-east-1"
+    ipxeBucket: "ipxe-builds"
+    osImagesBucket: "os-images"
+    # Internal communication doesn't need SSL
+    useSSL: false
+    verify: false
+    signatureVersion: "s3v4"
+    addressingStyle: "path"
+    urlExpireSeconds: "7200"  # 2 hours for large file downloads
+
+# High Availability MinIO Configuration
+minio:
+  enabled: true
+  auth:
+    rootUser: minioadmin
+    # Set via sealed-secrets or external secret operator
+    # rootPassword: <from-secret>
+  
+  # Distributed mode for HA (minimum 4 nodes)
+  mode: distributed
+  replicas: 4
+  zones: 1
+  drivesPerNode: 1
+  
+  persistence:
+    enabled: true
+    size: 2Ti  # 2TB per node = 8TB total raw capacity
+    storageClass: "fast-ssd"
+    
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+  
+  # Console ingress
+  ingress:
+    enabled: true
+    hostname: minio-console.durantic.example.com
+    ingressClassName: nginx
+    tls: true
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  
+  # API ingress for S3 protocol
+  apiIngress:
+    enabled: true
+    hostname: minio.durantic.example.com
+    ingressClassName: nginx
+    tls: true
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      # Important for large file uploads
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+      nginx.ingress.kubernetes.io/send-timeout: "300"
+      # CORS for direct browser access
+      nginx.ingress.kubernetes.io/enable-cors: "true"
+      nginx.ingress.kubernetes.io/cors-allow-origin: "https://durantic.example.com"
+  
+  resources:
+    requests:
+      memory: 4Gi
+      cpu: 2
+    limits:
+      memory: 8Gi
+      cpu: 4
+  
+  # Enable metrics for monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 30s
+  
+  # Node affinity to use specific nodes with fast storage
+  nodeSelector:
+    node-role.kubernetes.io/storage: "true"
+  
+  # Pod anti-affinity for distribution
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - minio
+          topologyKey: kubernetes.io/hostname
+  
+  # Lifecycle policies (example)
+  policies:
+    - name: "os-images-lifecycle"
+      policy: |
+        {
+          "Rules": [{
+            "ID": "expire-old-images",
+            "Status": "Enabled",
+            "Expiration": {
+              "Days": 90
+            },
+            "NoncurrentVersionExpiration": {
+              "NoncurrentDays": 30
+            }
+          }]
+        }
+
+# Durantic app configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: durantic.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: durantic-tls
+      hosts:
+        - durantic.example.com
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Disable local storage subcharts
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
