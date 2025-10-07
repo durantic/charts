@@ -18,13 +18,15 @@ django:
     port: "5432"
     name: "durantic"
     user: "durantic"
-    # password: set via secret
+    existingSecret: "postgresql-cluster-app"
+    secretKeys:
+      password: "password"
 
   # Redis configuration - using existing cluster resources
   redis:
-    host: "redis-master.default.svc.cluster.local"
+    host: "redis-standalone.default.svc.cluster.local"
     port: "6379"
-    # password: set via secret
+    password: ""  # No authentication required
 
   # S3/MinIO configuration
   s3:
