@@ -1,0 +1,68 @@
+{{- if .Values.minio.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "durantic.fullname" . }}-minio-setup
+  labels:
+    {{- include "durantic.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "durantic.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio-setup
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-minio
+          image: busybox:1.36
+          command: 
+            - sh
+            - -c
+            - |
+              until nc -z {{ .Release.Name }}-minio {{ .Values.minio.service.ports.api }}; do
+                echo "Waiting for MinIO..."
+                sleep 2
+              done
+              echo "MinIO is ready"
+      containers:
+        - name: create-buckets
+          image: minio/mc:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              
+              # Configure MinIO client
+              mc alias set minio http://{{ .Release.Name }}-minio:{{ .Values.minio.service.ports.api }} \
+                $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+              
+              # Create buckets
+              mc mb -p minio/{{ .Values.django.s3.ipxeBucket }} || true
+              mc mb -p minio/{{ .Values.django.s3.osImagesBucket }} || true
+              
+              # Set bucket policies (optional - make them public-read for development)
+              {{- if eq .Values.django.debug true }}
+              mc anonymous set download minio/{{ .Values.django.s3.ipxeBucket }}
+              mc anonymous set download minio/{{ .Values.django.s3.osImagesBucket }}
+              {{- end }}
+              
+              echo "MinIO buckets created successfully"
+          env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds-secret
+                  key: accesskey
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds-secret
+                  key: secretkey
+{{- end }}

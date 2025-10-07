@@ -1,0 +1,261 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "durantic.fullname" . }}
+  labels:
+    {{- include "durantic.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "durantic.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "durantic.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "durantic.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z {{ include "durantic.databaseHost" . }} {{ .Values.django.database.port }}; do echo waiting for db; sleep 2; done;']
+        - name: wait-for-redis
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z {{ include "durantic.redisHost" . }} {{ .Values.django.redis.port }}; do echo waiting for redis; sleep 2; done;']
+        {{- if .Values.minio.enabled }}
+        - name: wait-for-minio
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z {{ .Release.Name }}-minio {{ .Values.minio.service.ports.api }}; do echo waiting for minio; sleep 2; done;']
+        {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            # Django settings
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "durantic.fullname" . }}
+                  key: django-secret-key
+            - name: DEBUG
+              value: {{ .Values.django.debug | quote }}
+            - name: ALLOWED_HOSTS
+              value: {{ .Values.django.allowedHosts | quote }}
+            {{- if .Values.django.csrfTrustedOrigins }}
+            - name: CSRF_TRUSTED_ORIGINS
+              value: {{ .Values.django.csrfTrustedOrigins | quote }}
+            {{- end }}
+            {{- if .Values.django.controlPlaneHost }}
+            - name: CONTROL_PLANE_HOST
+              value: {{ .Values.django.controlPlaneHost | quote }}
+            {{- end }}
+            - name: JWE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "durantic.fullname" . }}
+                  key: jwe-key
+            
+            # Database settings
+            - name: DB_HOST
+              value: {{ include "durantic.databaseHost" . | quote }}
+            - name: DB_PORT
+              value: {{ .Values.django.database.port | quote }}
+            - name: DB_NAME
+              value: {{ .Values.django.database.name | quote }}
+            - name: DB_USER
+              value: {{ .Values.django.database.user | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.postgresql.enabled }}
+                  name: {{ .Release.Name }}-postgresql
+                  key: password
+                  {{- else if .Values.django.database.existingSecret }}
+                  name: {{ .Values.django.database.existingSecret }}
+                  key: {{ .Values.django.database.secretKeys.password | default "password" }}
+                  {{- else }}
+                  name: {{ include "durantic.fullname" . }}
+                  key: database-password
+                  {{- end }}
+            
+            # Redis settings
+            - name: REDIS_HOST
+              value: {{ include "durantic.redisHost" . | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.django.redis.port | quote }}
+            - name: REDIS_PASSWORD
+              {{- if and (not .Values.redis.enabled) .Values.django.redis.existingSecret (ne .Values.django.redis.existingSecret "") }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.django.redis.existingSecret }}
+                  key: {{ .Values.django.redis.secretKeys.password | default "password" }}
+              {{- else if .Values.redis.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-redis
+                  key: redis-password
+              {{- else if and (not .Values.redis.enabled) (hasKey .Values.django.redis "password") }}
+              value: {{ .Values.django.redis.password | quote }}
+              {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "durantic.fullname" . }}
+                  key: redis-password
+              {{- end }}
+            
+            # Email settings
+            {{- if .Values.django.email.user }}
+            - name: EMAIL_BACKEND
+              value: {{ .Values.django.email.backend | quote }}
+            - name: EMAIL_HOST
+              value: {{ .Values.django.email.host | quote }}
+            - name: EMAIL_PORT
+              value: {{ .Values.django.email.port | quote }}
+            - name: EMAIL_USE_TLS
+              value: {{ .Values.django.email.useTls | quote }}
+            - name: EMAIL_HOST_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "durantic.fullname" . }}
+                  key: email-user
+            - name: EMAIL_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "durantic.fullname" . }}
+                  key: email-password
+            - name: DEFAULT_FROM_EMAIL
+              value: {{ .Values.django.email.defaultFrom | quote }}
+            {{- end }}
+            
+            # S3/MinIO settings
+            {{- if or .Values.django.s3.accessKeyId .Values.minio.enabled }}
+            - name: AWS_S3_ENDPOINT_URL
+              value: {{ include "durantic.minioEndpoint" . | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds-secret
+                  key: accesskey
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-creds-secret
+                  key: secretkey
+            - name: AWS_S3_REGION_NAME
+              value: {{ .Values.django.s3.region | quote }}
+            - name: AWS_IPXE_STORAGE_BUCKET_NAME
+              value: {{ .Values.django.s3.ipxeBucket | quote }}
+            - name: AWS_OS_IMAGES_BUCKET_NAME
+              value: {{ .Values.django.s3.osImagesBucket | quote }}
+            - name: AWS_S3_USE_SSL
+              value: {{ .Values.django.s3.useSSL | quote }}
+            - name: AWS_S3_VERIFY
+              value: {{ .Values.django.s3.verify | quote }}
+            - name: AWS_S3_SIGNATURE_VERSION
+              value: {{ .Values.django.s3.signatureVersion | quote }}
+            - name: AWS_S3_ADDRESSING_STYLE
+              value: {{ .Values.django.s3.addressingStyle | quote }}
+            {{- if .Values.django.s3.publicUrl }}
+            - name: AWS_S3_PUBLIC_URL
+              value: {{ .Values.django.s3.publicUrl | quote }}
+            {{- end }}
+            {{- if .Values.django.s3.urlExpireSeconds }}
+            - name: AWS_S3_URL_EXPIRE_SECONDS
+              value: {{ .Values.django.s3.urlExpireSeconds | quote }}
+            {{- end }}
+            {{- end }}
+            
+            # Control plane settings
+            - name: CONTROL_PLANE_NODE_ID
+              value: {{ include "durantic.controlPlaneNodeId" . | quote }}
+            - name: ENABLE_GRPC_SERVER
+              value: {{ .Values.controlPlane.enableGrpcServer | quote }}
+            - name: GRPC_PORT
+              value: {{ .Values.grpcService.port | quote }}
+            
+            # Uvicorn settings
+            - name: HTTP_PORT
+              value: {{ .Values.service.httpPort | quote }}
+            - name: UVICORN_WORKERS
+              value: {{ .Values.uvicorn.workers | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.uvicorn.logLevel | quote }}
+            {{- if .Values.uvicorn.extraArgs }}
+            - name: UVICORN_EXTRA_ARGS
+              value: {{ .Values.uvicorn.extraArgs | quote }}
+            {{- end }}
+            
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: certificates
+              mountPath: /app/certs
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: media
+              mountPath: /app/media
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: certificates
+          secret:
+            secretName: {{ include "durantic.fullname" . }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: ca.key
+                path: ca.key
+                mode: 0600
+        {{- if .Values.persistence.enabled }}
+        - name: media
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "durantic.fullname" .) }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

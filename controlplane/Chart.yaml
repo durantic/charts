@@ -1,0 +1,23 @@
+apiVersion: v2
+name: controlplane
+description: Django Control Plane for infrastructure provisioning with iPXE/PXE support
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - django
+  - control-plane
+  - ipxe
+  - provisioning
+  - infrastructure
+home: https://github.com/durantic/controlplane
+sources:
+  - https://github.com/durantic/controlplane
+maintainers:
+  - name: Durantic Team
+    email: team@durantic.io
+# Dependencies are now managed separately via ArgoCD
+# PostgreSQL: CloudNativePG operator
+# Redis: OT-Container-Kit Redis operator
+# MinIO: Official MinIO operator
+dependencies: []

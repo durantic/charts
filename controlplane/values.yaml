@@ -1,0 +1,310 @@
+# Default values for durantic.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/durantic/controlplane
+  pullPolicy: IfNotPresent
+  tag: ""  # Overrides the image tag whose default is the chart appVersion.
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Django configuration
+django:
+  secretKey: ""  # Auto-generated if not provided
+  jweKey: ""  # Auto-generated if not provided (32 chars)
+  debug: false
+  allowedHosts: "*"
+  csrfTrustedOrigins: ""  # Comma-separated list of additional trusted origins for CSRF
+  controlPlaneHost: ""  # Override the control plane host (e.g., api.stage.durantic.dev)
+  
+  # Database configuration
+  database:
+    host: ""  # Uses subchart if empty
+    port: "5432"
+    name: "durantic"
+    user: "durantic"
+    password: ""  # Auto-generated if not provided
+  
+  # Redis configuration
+  redis:
+    host: ""  # Uses subchart if empty
+    port: "6379"
+    password: ""  # Auto-generated if not provided
+  
+  # Email configuration
+  email:
+    backend: "django.core.mail.backends.smtp.EmailBackend"
+    host: "smtp.gmail.com"
+    port: "587"
+    useTls: true
+    user: ""
+    password: ""
+    defaultFrom: "noreply@example.com"
+  
+  # S3/MinIO configuration
+  s3:
+    endpointUrl: ""  # Auto-configured for MinIO if enabled
+    accessKeyId: ""  # Uses MinIO credentials if enabled
+    secretAccessKey: ""  # Uses MinIO credentials if enabled
+    region: "us-east-1"
+    ipxeBucket: "ipxe-builds"
+    osImagesBucket: "os-images"
+    useSSL: true
+    verify: true
+    # URL signing configuration
+    signatureVersion: "s3v4"
+    addressingStyle: "path"  # path or virtual - MinIO uses path style
+    urlExpireSeconds: "3600"  # 1 hour default
+    publicUrl: ""  # External URL for MinIO if different from internal endpoint
+
+# Additional environment variables
+extraEnv: []
+  # - name: EXTRA_VAR
+  #   value: "extra-value"
+
+# Secrets to be mounted
+extraSecrets: []
+  # - name: extra-secret
+  #   mountPath: /app/secrets
+  #   readOnly: true
+
+# HTTP Service configuration
+service:
+  type: ClusterIP
+  httpPort: 8000
+  grpcPort: 50051
+  annotations: {}
+
+# gRPC Service configuration  
+grpcService:
+  enabled: true
+  type: ClusterIP
+  port: 50051
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: durantic.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: durantic-tls
+  #    hosts:
+  #      - durantic.local
+
+# gRPC Ingress (if using NGINX with gRPC support)
+grpcIngress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+  hosts:
+    - host: grpc.durantic.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# PostgreSQL subchart configuration
+postgresql:
+  enabled: true
+  auth:
+    username: durantic
+    password: ""  # Auto-generated if not provided
+    database: durantic
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+  metrics:
+    enabled: false
+
+# Redis subchart configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: ""  # Auto-generated if not provided
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  metrics:
+    enabled: false
+
+# Job for database migrations
+migrations:
+  enabled: true
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    path: /metrics
+
+# Control plane specific settings
+controlPlane:
+  nodeId: ""  # Required: unique identifier for this control plane instance
+  enableGrpcServer: true
+  grpcWorkers: 10
+  
+# Uvicorn settings
+uvicorn:
+  workers: 4
+  logLevel: "info"
+  accessLog: true
+  extraArgs: ""
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health/
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health/
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Persistence for media files
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  # existingClaim: ""
+
+# MinIO subchart configuration
+minio:
+  enabled: true
+  auth:
+    rootUser: minioadmin
+    rootPassword: ""  # Auto-generated if not provided
+  defaultBuckets: "ipxe-builds,os-images"
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: ""  # Use default or specify
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+  ingress:
+    enabled: false
+    hostname: minio.durantic.local
+    ingressClassName: nginx
+    tls: false
+    annotations: {}
+      # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  metrics:
+    enabled: false
+    serviceMonitor:
+      enabled: false
+  # Configure for distributed mode in production
+  mode: standalone  # Change to 'distributed' for HA
+  replicas: 1  # Set to 4+ for distributed mode
+  zones: 1  # Number of zones for distributed mode
+  drivesPerNode: 1  # Drives per node for distributed mode
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+
+# Certificate configuration
+certificates:
+  ca:
+    # Set to false to use external CA certificate
+    generate: true
+    # CA certificate common name
+    commonName: "Durantic Control Plane CA"
+    # Validity in days
+    validity: 365  # 1 year
+    # External CA certificate and key (if generate=false)
+    cert: ""
+    key: ""
+
+# Additional volumes
+extraVolumes: []
+  # - name: extra-volume
+  #   configMap:
+  #     name: extra-configmap
+
+extraVolumeMounts: []
+  # - name: extra-volume
+  #   mountPath: /app/extra

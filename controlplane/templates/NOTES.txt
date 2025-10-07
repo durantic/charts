@@ -1,0 +1,80 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "durantic.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "durantic.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "durantic.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.httpPort }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "durantic.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. Database migrations are being applied. Check the status with:
+   kubectl get jobs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=migration
+
+3. To create a superuser, run:
+   kubectl exec -it -n {{ .Release.Namespace }} deployment/{{ include "durantic.fullname" . }} -- python manage.py createsuperuser
+
+4. To access the Django admin interface, visit:
+   http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}/admin
+
+{{- if .Values.controlPlane.enableGrpcServer }}
+5. The gRPC server is available on port {{ .Values.grpcService.port }}
+{{- if .Values.grpcIngress.enabled }}
+   gRPC endpoint: {{ (index .Values.grpcIngress.hosts 0).host }}:443
+{{- end }}
+{{- end }}
+
+{{- if not .Values.django.secretKey }}
+6. A Django SECRET_KEY has been automatically generated. To retrieve it:
+   kubectl get secret -n {{ .Release.Namespace }} {{ include "durantic.fullname" . }} -o jsonpath="{.data.django-secret-key}" | base64 -d
+{{- end }}
+
+{{- if and .Values.postgresql.enabled (not .Values.django.database.password) }}
+7. PostgreSQL password was auto-generated. To retrieve it:
+   kubectl get secret -n {{ .Release.Namespace }} {{ include "durantic.fullname" . }} -o jsonpath="{.data.database-password}" | base64 -d
+{{- end }}
+
+{{- if and .Values.redis.enabled (not .Values.django.redis.password) }}
+8. Redis password was auto-generated. To retrieve it:
+   kubectl get secret -n {{ .Release.Namespace }} {{ include "durantic.fullname" . }} -o jsonpath="{.data.redis-password}" | base64 -d
+{{- end }}
+
+{{- if .Values.minio.enabled }}
+9. MinIO is enabled for object storage:
+   - API Endpoint: {{ include "durantic.fullname" . }}-minio:{{ .Values.minio.service.ports.api }}
+   - Console: {{ include "durantic.fullname" . }}-minio:{{ .Values.minio.service.ports.console }}
+   {{- if .Values.minio.ingress.enabled }}
+   - Console URL: http{{ if .Values.minio.ingress.tls }}s{{ end }}://{{ .Values.minio.ingress.hostname }}
+   {{- end }}
+   - Buckets created: {{ .Values.django.s3.ipxeBucket }}, {{ .Values.django.s3.osImagesBucket }}
+   - MinIO credentials are auto-generated via minio-credential-generator. To retrieve them:
+     kubectl get secret -n {{ .Release.Namespace }} minio-creds-secret -o jsonpath="{.data.secretkey}" | base64 -d
+{{- end }}
+
+{{- if .Values.certificates.ca.generate }}
+10. CA Certificate for mTLS has been generated:
+    - Validity: {{ .Values.certificates.ca.validity }} days
+    - Common Name: {{ .Values.certificates.ca.commonName }}
+    
+    To extract the CA certificate:
+    kubectl get secret -n {{ .Release.Namespace }} {{ include "durantic.fullname" . }} -o jsonpath="{.data.ca\.crt}" | base64 -d > ca.crt
+{{- end }}
+
+11. JWE Key for JWT encryption has been configured.
+    {{- if not .Values.django.jweKey }}
+    A JWE key was auto-generated. To retrieve it:
+    kubectl get secret -n {{ .Release.Namespace }} {{ include "durantic.fullname" . }} -o jsonpath="{.data.jwe-key}" | base64 -d
+    {{- end }}
