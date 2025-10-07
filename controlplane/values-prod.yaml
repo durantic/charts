@@ -1,0 +1,90 @@
+# Production environment values for controlplane
+# This file is automatically updated by CI/CD
+
+image:
+  repository: ghcr.io/durantic/controlplane
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+django:
+  debug: false
+  allowedHosts: "api.durantic.dev,controlplane-prod,controlplane-prod.production.svc.cluster.local"
+  controlPlaneHost: "api.durantic.dev"
+  csrfTrustedOrigins: "https://api.durantic.dev,https://dashboard.durantic.dev"
+
+  # Database configuration - using existing cluster resources
+  database:
+    host: "postgresql-cluster-rw.production.svc.cluster.local"
+    port: "5432"
+    name: "durantic"
+    user: "durantic"
+    # password: set via secret
+
+  # Redis configuration - using existing cluster resources
+  redis:
+    host: "redis-master.production.svc.cluster.local"
+    port: "6379"
+    # password: set via secret
+
+  # S3/MinIO configuration
+  s3:
+    endpointUrl: "https://minio.durantic.dev"
+    region: "us-east-1"
+    ipxeBucket: "ipxe-builds"
+    osImagesBucket: "os-images"
+    useSSL: true
+    verify: true
+    addressingStyle: "path"
+    urlExpireSeconds: "3600"
+    publicUrl: "https://minio.durantic.dev"
+    # accessKeyId: set via secret
+    # secretAccessKey: set via secret
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  hosts:
+    - host: api.durantic.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: controlplane-prod-tls
+      hosts:
+        - api.durantic.dev
+
+service:
+  type: ClusterIP
+  httpPort: 8000
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Release metadata (updated by CI/CD)
+releaseMetadata:
+  version: ""
+  releasedAt: ""
+  releasedBy: ""
