@@ -81,3 +81,22 @@ autoscaling:
 
 persistence:
   enabled: false
+
+# Health probes - use /admin/ endpoint
+livenessProbe:
+  httpGet:
+    path: /admin/
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /admin/
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
