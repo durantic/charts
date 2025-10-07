@@ -1,7 +1,7 @@
-# Stage environment values for controlplane
-# Based on values-dev.yaml but for staging environment
+# Stage environment values - matches existing deployment
+# DO NOT change these values - they match the current working deployment
 
-replicaCount: 2
+replicaCount: 1
 
 image:
   repository: ghcr.io/durantic/controlplane
@@ -9,34 +9,37 @@ image:
   pullPolicy: Always
 
 django:
-  debug: false
+  debug: true
   allowedHosts: "api.stage.durantic.dev,controlplane-durantic,controlplane-durantic.default.svc.cluster.local"
+  controlPlaneHost: "api.stage.durantic.dev"
+  csrfTrustedOrigins: "https://api.stage.durantic.dev"
 
-  # Database configuration - using existing cluster resources
   database:
-    host: "postgresql-cluster-rw.default.svc.cluster.local"
-    port: "5432"
-    name: "durantic"
-    user: "durantic"
+    host: "postgresql-cluster-rw"
+    port: 5432
+    name: "app"
+    user: "app"
     existingSecret: "postgresql-cluster-app"
     secretKeys:
       password: "password"
 
-  # Redis configuration - using existing cluster resources
   redis:
-    host: "redis-standalone.default.svc.cluster.local"
-    port: "6379"
-    password: ""  # No authentication required
+    host: "redis-standalone"
+    port: 6379
+    password: ""
+    existingSecret: ""
 
-  # S3/MinIO configuration
   s3:
-    endpointUrl: "http://minio-instance.default.svc.cluster.local:9000"
+    endpointUrl: "http://minio-instance:9000"
     region: "us-east-1"
     ipxeBucket: "ipxe-builds"
     osImagesBucket: "os-images"
     useSSL: false
     verify: false
     addressingStyle: "path"
+    existingSecret: "minio-instance"
+    accessKeyId: ""
+    secretAccessKey: ""
 
 ingress:
   enabled: true
@@ -55,7 +58,7 @@ ingress:
       hosts:
         - api.stage.durantic.dev
 
-# Disable subcharts in staging - use existing cluster resources
+# Disable subcharts - use existing cluster resources
 postgresql:
   enabled: false
 
