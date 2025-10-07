@@ -30,7 +30,7 @@ django:
 
   # S3/MinIO configuration
   s3:
-    endpointUrl: "http://minio.default.svc.cluster.local:9000"
+    endpointUrl: "http://minio-instance.default.svc.cluster.local:9000"
     region: "us-east-1"
     ipxeBucket: "ipxe-builds"
     osImagesBucket: "os-images"
