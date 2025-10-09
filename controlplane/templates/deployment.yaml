@@ -164,13 +164,13 @@ spec:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: minio-creds-secret
-                  key: accesskey
+                  name: {{ .Values.django.s3.existingSecret | default "minio-instance" }}
+                  key: {{ .Values.django.s3.existingSecretAccessKeyIdKey | default "root-user" }}
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-creds-secret
-                  key: secretkey
+                  name: {{ .Values.django.s3.existingSecret | default "minio-instance" }}
+                  key: {{ .Values.django.s3.existingSecretAccessKeyKey | default "root-password" }}
             - name: AWS_S3_REGION_NAME
               value: {{ .Values.django.s3.region | quote }}
             - name: AWS_IPXE_STORAGE_BUCKET_NAME
