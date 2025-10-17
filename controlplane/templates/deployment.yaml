@@ -79,6 +79,32 @@ spec:
             - name: CONTROL_PLANE_HOST
               value: {{ .Values.django.controlPlaneHost | quote }}
             {{- end }}
+
+            # Session and CSRF cookie settings for cross-origin authentication
+            {{- if .Values.django.sessionCookieSameSite }}
+            - name: SESSION_COOKIE_SAMESITE
+              value: {{ .Values.django.sessionCookieSameSite | quote }}
+            {{- end }}
+            {{- if .Values.django.sessionCookieSecure }}
+            - name: SESSION_COOKIE_SECURE
+              value: {{ .Values.django.sessionCookieSecure | quote }}
+            {{- end }}
+            {{- if .Values.django.sessionCookieDomain }}
+            - name: SESSION_COOKIE_DOMAIN
+              value: {{ .Values.django.sessionCookieDomain | quote }}
+            {{- end }}
+            {{- if .Values.django.csrfCookieSameSite }}
+            - name: CSRF_COOKIE_SAMESITE
+              value: {{ .Values.django.csrfCookieSameSite | quote }}
+            {{- end }}
+            {{- if .Values.django.csrfCookieSecure }}
+            - name: CSRF_COOKIE_SECURE
+              value: {{ .Values.django.csrfCookieSecure | quote }}
+            {{- end }}
+            {{- if .Values.django.csrfCookieDomain }}
+            - name: CSRF_COOKIE_DOMAIN
+              value: {{ .Values.django.csrfCookieDomain | quote }}
+            {{- end }}
             - name: JWE_KEY
               valueFrom:
                 secretKeyRef:
