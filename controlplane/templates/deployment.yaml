@@ -80,6 +80,16 @@ spec:
               value: {{ .Values.django.controlPlaneHost | quote }}
             {{- end }}
 
+            # Optional gRPC endpoint configuration for install.sh
+            {{- if .Values.django.grpcHost }}
+            - name: CONTROL_PLANE_GRPC_HOST
+              value: {{ .Values.django.grpcHost | quote }}
+            {{- end }}
+            {{- if .Values.django.grpcPort }}
+            - name: CONTROL_PLANE_GRPC_PORT
+              value: {{ .Values.django.grpcPort | quote }}
+            {{- end }}
+
             # Session and CSRF cookie settings for cross-origin authentication
             {{- if .Values.django.sessionCookieSameSite }}
             - name: SESSION_COOKIE_SAMESITE
