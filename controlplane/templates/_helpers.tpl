@@ -160,33 +160,24 @@ Generate JWE Key
 {{- end }}
 
 {{/*
-Generate self-signed CA certificate
+Generate or lookup CA certificate and key.
+Returns cert and key separated by pipe: "cert|key"
+This ensures CA is generated only ONCE and persists across upgrades.
 */}}
-{{- define "durantic.generateCA" -}}
-{{- $ca := genCA .Values.certificates.ca.commonName .Values.certificates.ca.validity -}}
-{{- $ca | toJson -}}
-{{- end }}
-
-{{/*
-Get or generate CA certificate
-*/}}
-{{- define "durantic.caCert" -}}
-{{- if .Values.certificates.ca.cert }}
-{{- .Values.certificates.ca.cert }}
+{{- define "durantic.generateOrLookupCA" -}}
+{{- if and .Values.certificates.ca.cert .Values.certificates.ca.key }}
+  {{/* Use provided CA from values */}}
+  {{- printf "%s|%s" .Values.certificates.ca.cert .Values.certificates.ca.key }}
 {{- else }}
-{{- $ca := genCA .Values.certificates.ca.commonName (.Values.certificates.ca.validity | int) -}}
-{{- $ca.Cert }}
-{{- end }}
-{{- end }}
-
-{{/*
-Get or generate CA key
-*/}}
-{{- define "durantic.caKey" -}}
-{{- if .Values.certificates.ca.key }}
-{{- .Values.certificates.ca.key }}
-{{- else }}
-{{- $ca := genCA .Values.certificates.ca.commonName (.Values.certificates.ca.validity | int) -}}
-{{- $ca.Key }}
+  {{/* Try to lookup existing secret */}}
+  {{- $secret := lookup "v1" "Secret" .Release.Namespace (include "durantic.fullname" .) }}
+  {{- if and $secret $secret.data (index $secret.data "ca.crt") (index $secret.data "ca.key") }}
+    {{/* Reuse existing CA from secret */}}
+    {{- printf "%s|%s" (index $secret.data "ca.crt" | b64dec) (index $secret.data "ca.key" | b64dec) }}
+  {{- else }}
+    {{/* Generate new CA - only happens on first install */}}
+    {{- $ca := genCA .Values.certificates.ca.commonName (.Values.certificates.ca.validity | int) -}}
+    {{- printf "%s|%s" $ca.Cert $ca.Key }}
+  {{- end }}
 {{- end }}
 {{- end }}
