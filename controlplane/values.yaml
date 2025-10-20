@@ -42,6 +42,8 @@ django:
   allowedHosts: "*"
   csrfTrustedOrigins: ""  # Comma-separated list of additional trusted origins for CSRF
   controlPlaneHost: ""  # Override the control plane host (e.g., api.stage.durantic.dev)
+  grpcHost: ""  # Optional: gRPC host (defaults to controlPlaneHost if not set)
+  grpcPort: ""  # Optional: gRPC port (defaults to 50051 if not set)
   
   # Database configuration
   database:
@@ -127,15 +129,23 @@ ingress:
 # gRPC Ingress (if using NGINX with gRPC support)
 grpcIngress:
   enabled: false
-  className: ""
-  annotations: {}
-    # nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/grpc-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
     - host: grpc.durantic.local
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: controlplane-grpc-tls
+      hosts:
+        - grpc.durantic.local
 
 resources:
   limits:
