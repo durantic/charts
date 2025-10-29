@@ -225,6 +225,10 @@ spec:
             - name: AWS_S3_URL_EXPIRE_SECONDS
               value: {{ .Values.django.s3.urlExpireSeconds | quote }}
             {{- end }}
+            {{- if .Values.django.s3.publicEndpointUrl }}
+            - name: AWS_S3_PUBLIC_ENDPOINT_URL
+              value: {{ .Values.django.s3.publicEndpointUrl | quote }}
+            {{- end }}
             {{- end }}
             
             # Control plane settings
