@@ -221,10 +221,6 @@ spec:
               value: {{ .Values.django.s3.signatureVersion | quote }}
             - name: AWS_S3_ADDRESSING_STYLE
               value: {{ .Values.django.s3.addressingStyle | quote }}
-            {{- if .Values.django.s3.customDomain }}
-            - name: AWS_S3_CUSTOM_DOMAIN
-              value: {{ .Values.django.s3.customDomain | quote }}
-            {{- end }}
             {{- if .Values.django.s3.urlExpireSeconds }}
             - name: AWS_S3_URL_EXPIRE_SECONDS
               value: {{ .Values.django.s3.urlExpireSeconds | quote }}
