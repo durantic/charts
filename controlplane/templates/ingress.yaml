@@ -129,13 +129,14 @@ spec:
 {{- $className := .Values.ingress.className -}}
 {{- $mergedAnnotations := merge .Values.pxeMtlsIngress.annotations .Values.ingress.annotations -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-client" "on" -}}
-{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager .Values.pxeMtlsIngress.host -}}
-{{- $_ := set $mergedAnnotations "cert-manager.io/issuer" (printf "%s-ca-issuer" $fullName) -}}
-{{- end -}}
 {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-root-ca-secret" .Release.Namespace $fullName) -}}
 {{- else -}}
-{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s" .Release.Namespace $fullName) -}}
+{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-client-ca" .Release.Namespace $fullName) -}}
+{{- end -}}
+{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager .Values.pxeMtlsIngress.host -}}
+{{- $_ := set $mergedAnnotations "cert-manager.io/issuer" (printf "%s-ca-issuer" $fullName) -}}
+{{- $_ := unset $mergedAnnotations "cert-manager.io/cluster-issuer" -}}
 {{- end -}}
 {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-depth" "2" -}}
