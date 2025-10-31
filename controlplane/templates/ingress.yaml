@@ -129,7 +129,11 @@ spec:
 {{- $className := .Values.ingress.className -}}
 {{- $mergedAnnotations := merge .Values.pxeMtlsIngress.annotations .Values.ingress.annotations -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-client" "on" -}}
-{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-client-ca" .Release.Namespace $fullName) -}}
+{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
+{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-ca-secret" .Release.Namespace $fullName) -}}
+{{- else -}}
+{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s" .Release.Namespace $fullName) -}}
+{{- end -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-depth" "1" -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream" "true" -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-error-page" (printf "https://%s/pxe-cert-invalid" (index .Values.ingress.hosts 0).host) -}}
