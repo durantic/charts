@@ -79,6 +79,10 @@ spec:
             - name: CONTROL_PLANE_HOST
               value: {{ .Values.django.controlPlaneHost | quote }}
             {{- end }}
+            {{- if .Values.django.pxeHost }}
+            - name: PXE_HOST
+              value: {{ .Values.django.pxeHost | quote }}
+            {{- end }}
 
             # Optional gRPC endpoint configuration for install.sh
             {{- if .Values.django.grpcHost }}
