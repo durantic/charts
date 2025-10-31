@@ -15,6 +15,7 @@ django:
   debug: true
   allowedHosts: "api.stage.durantic.dev,controlplane-durantic,controlplane-durantic.default.svc.cluster.local"
   controlPlaneHost: "api.stage.durantic.dev"
+  pxeHost: "pxe.stage.durantic.dev"
   csrfTrustedOrigins: "https://api.stage.durantic.dev"
 
   database:
