@@ -147,6 +147,17 @@ grpcIngress:
       hosts:
         - grpc.durantic.local
 
+# PXE mTLS Ingress - requires client certificates for /pxe/* endpoints
+# Inherits className, tls, and base host from main ingress
+# Only adds mTLS-specific annotations and /pxe path
+pxeMtlsIngress:
+  enabled: false
+  # Override annotations if needed (merged with ingress.annotations in template)
+  annotations: {}
+  # Override path - defaults to /pxe if not specified
+  path: /pxe
+  pathType: Prefix
+
 resources:
   limits:
     cpu: 1000m

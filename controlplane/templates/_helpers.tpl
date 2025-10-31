@@ -165,19 +165,19 @@ Returns cert and key separated by pipe: "cert|key"
 This ensures CA is generated only ONCE and persists across upgrades.
 */}}
 {{- define "durantic.generateOrLookupCA" -}}
-{{- if and .Values.certificates.ca.cert .Values.certificates.ca.key }}
-  {{/* Use provided CA from values */}}
-  {{- printf "%s|%s" .Values.certificates.ca.cert .Values.certificates.ca.key }}
-{{- else }}
-  {{/* Try to lookup existing secret */}}
-  {{- $secret := lookup "v1" "Secret" .Release.Namespace (include "durantic.fullname" .) }}
-  {{- if and $secret $secret.data (index $secret.data "ca.crt") (index $secret.data "ca.key") }}
-    {{/* Reuse existing CA from secret */}}
-    {{- printf "%s|%s" (index $secret.data "ca.crt" | b64dec) (index $secret.data "ca.key" | b64dec) }}
-  {{- else }}
-    {{/* Generate new CA - only happens on first install */}}
-    {{- $ca := genCA .Values.certificates.ca.commonName (.Values.certificates.ca.validity | int) -}}
-    {{- printf "%s|%s" $ca.Cert $ca.Key }}
-  {{- end }}
-{{- end }}
-{{- end }}
+{{- if and .Values.certificates.ca.cert .Values.certificates.ca.key -}}
+{{/* Use provided CA from values */}}
+{{- printf "%s|%s" .Values.certificates.ca.cert .Values.certificates.ca.key -}}
+{{- else -}}
+{{/* Try to lookup existing secret */}}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace (include "durantic.fullname" .) -}}
+{{- if and $secret $secret.data (index $secret.data "ca.crt") (index $secret.data "ca.key") -}}
+{{/* Reuse existing CA from secret */}}
+{{- printf "%s|%s" (index $secret.data "ca.crt" | b64dec) (index $secret.data "ca.key" | b64dec) -}}
+{{- else -}}
+{{/* Generate new CA - only happens on first install */}}
+{{- $ca := genCA .Values.certificates.ca.commonName (.Values.certificates.ca.validity | int) -}}
+{{- printf "%s|%s" $ca.Cert $ca.Key -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
