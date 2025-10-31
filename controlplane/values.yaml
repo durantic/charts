@@ -312,10 +312,12 @@ certificates:
   ca:
     # Set to false to use external CA certificate
     generate: true
+    # Use cert-manager for CA generation instead of Helm genCA
+    useCertManager: false
     # CA certificate common name
     commonName: "Durantic Control Plane CA"
     # Validity in days
-    validity: 365  # 1 year
+    validity: 1825  # 5 years
     # External CA certificate and key (if generate=false)
     cert: ""
     key: ""

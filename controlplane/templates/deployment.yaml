@@ -268,6 +268,17 @@ spec:
       volumes:
         - name: certificates
           secret:
+            {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager }}
+            # cert-manager mode: reference the CA secret
+            secretName: {{ include "durantic.fullname" . }}-ca-secret
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: tls.key
+                path: ca.key
+                mode: 0600
+            {{- else }}
+            # Helm genCA mode: reference the main secret
             secretName: {{ include "durantic.fullname" . }}
             items:
               - key: ca.crt
@@ -275,6 +286,7 @@ spec:
               - key: ca.key
                 path: ca.key
                 mode: 0600
+            {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: media
           persistentVolumeClaim:

@@ -1,0 +1,51 @@
+{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager }}
+---
+# Self-signed ClusterIssuer (cluster-wide, reused across releases)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+# CA Certificate - creates secret with ca.crt, tls.crt, and tls.key
+# cert-manager will populate:
+# - ca.crt: the CA certificate (same as tls.crt for self-signed CA)
+# - tls.crt: the CA certificate
+# - tls.key: the CA private key
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "durantic.fullname" . }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "durantic.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/resource-policy": "keep"
+    "argocd.argoproj.io/sync-options": "Prune=false"
+spec:
+  isCA: true
+  commonName: {{ .Values.certificates.ca.commonName | quote }}
+  secretName: {{ include "durantic.fullname" . }}-ca-secret
+  duration: {{ mul .Values.certificates.ca.validity 24 }}h  # Convert days to hours
+  renewBefore: 720h  # Renew 30 days before expiry
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# CA Issuer for signing client certificates
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "durantic.fullname" . }}-ca-issuer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "durantic.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "durantic.fullname" . }}-ca-secret
+{{- end }}
