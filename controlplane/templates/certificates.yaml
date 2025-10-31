@@ -74,7 +74,7 @@ spec:
     kind: Issuer
     group: cert-manager.io
 ---
-# Intermediate CA Issuer - used for signing client certificates
+# Intermediate CA Issuer - used for signing client certificates and server certificates
 # This is the issuer applications will use
 apiVersion: cert-manager.io/v1
 kind: Issuer

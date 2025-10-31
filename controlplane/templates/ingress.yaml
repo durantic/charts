@@ -129,6 +129,9 @@ spec:
 {{- $className := .Values.ingress.className -}}
 {{- $mergedAnnotations := merge .Values.pxeMtlsIngress.annotations .Values.ingress.annotations -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-client" "on" -}}
+{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager .Values.pxeMtlsIngress.host -}}
+{{- $_ := set $mergedAnnotations "cert-manager.io/issuer" (printf "%s-ca-issuer" $fullName) -}}
+{{- end -}}
 {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-root-ca-secret" .Release.Namespace $fullName) -}}
 {{- else -}}
@@ -168,16 +171,21 @@ spec:
   {{- if and $className (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion) }}
   ingressClassName: {{ $className }}
   {{- end }}
-  {{- if .Values.ingress.tls }}
   tls:
+  {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager .Values.pxeMtlsIngress.host }}
+    # Use cert-manager generated certificate for PXE separate domain
+    - secretName: {{ $fullName }}-pxe-tls
+      hosts:
+        - {{ .Values.pxeMtlsIngress.host }}
+  {{- else if .Values.ingress.tls }}
+    # Use main ingress TLS config
     {{- toYaml .Values.ingress.tls | nindent 4 }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    - host: {{ .Values.pxeMtlsIngress.host | default (index .Values.ingress.hosts 0).host | quote }}
       http:
         paths:
-          - path: {{ $.Values.pxeMtlsIngress.path }}
+          - path: {{ .Values.pxeMtlsIngress.path }}
             {{- if and $.Values.pxeMtlsIngress.pathType (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
             pathType: {{ $.Values.pxeMtlsIngress.pathType }}
             {{- end }}
@@ -191,5 +199,4 @@ spec:
               serviceName: {{ $fullName }}
               servicePort: {{ $svcPort }}
               {{- end }}
-    {{- end }}
 {{- end }}
