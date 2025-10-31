@@ -152,6 +152,9 @@ grpcIngress:
 # Only adds mTLS-specific annotations and /pxe path
 pxeMtlsIngress:
   enabled: false
+  # Separate hostname for PXE mTLS (e.g., pxe.stage.durantic.dev)
+  # If not specified, uses main ingress host
+  host: ""
   # Override annotations if needed (merged with ingress.annotations in template)
   annotations: {}
   # Override path - defaults to /pxe if not specified
@@ -312,10 +315,12 @@ certificates:
   ca:
     # Set to false to use external CA certificate
     generate: true
+    # Use cert-manager for CA generation instead of Helm genCA
+    useCertManager: false
     # CA certificate common name
     commonName: "Durantic Control Plane CA"
     # Validity in days
-    validity: 365  # 1 year
+    validity: 1825  # 5 years
     # External CA certificate and key (if generate=false)
     cert: ""
     key: ""
