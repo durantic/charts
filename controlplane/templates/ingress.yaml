@@ -130,11 +130,15 @@ spec:
 {{- $mergedAnnotations := merge .Values.pxeMtlsIngress.annotations .Values.ingress.annotations -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-client" "on" -}}
 {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
-{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-ca-secret" .Release.Namespace $fullName) -}}
+{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s-root-ca-secret" .Release.Namespace $fullName) -}}
 {{- else -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-secret" (printf "%s/%s" .Release.Namespace $fullName) -}}
 {{- end -}}
+{{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager -}}
+{{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-depth" "2" -}}
+{{- else -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-verify-depth" "1" -}}
+{{- end -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream" "true" -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/auth-tls-error-page" (printf "https://%s/pxe-cert-invalid" (index .Values.ingress.hosts 0).host) -}}
 {{- $_ := set $mergedAnnotations "nginx.ingress.kubernetes.io/proxy-connect-timeout" "600" -}}

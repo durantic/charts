@@ -266,19 +266,28 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
+        {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager }}
+        # cert-manager mode: mount root CA for trust, intermediate CA for signing
+        - name: certificates
+          projected:
+            sources:
+              - secret:
+                  name: {{ include "durantic.fullname" . }}-root-ca-secret
+                  items:
+                    - key: tls.crt
+                      path: root-ca.crt
+              - secret:
+                  name: {{ include "durantic.fullname" . }}-ca-secret
+                  items:
+                    - key: tls.crt
+                      path: ca.crt
+                    - key: tls.key
+                      path: ca.key
+                      mode: 0600
+        {{- else }}
+        # Helm genCA mode: reference the main secret
         - name: certificates
           secret:
-            {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager }}
-            # cert-manager mode: reference the CA secret
-            secretName: {{ include "durantic.fullname" . }}-ca-secret
-            items:
-              - key: ca.crt
-                path: ca.crt
-              - key: tls.key
-                path: ca.key
-                mode: 0600
-            {{- else }}
-            # Helm genCA mode: reference the main secret
             secretName: {{ include "durantic.fullname" . }}
             items:
               - key: ca.crt
@@ -286,7 +295,7 @@ spec:
               - key: ca.key
                 path: ca.key
                 mode: 0600
-            {{- end }}
+        {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: media
           persistentVolumeClaim:
