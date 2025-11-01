@@ -85,6 +85,15 @@ django:
     urlExpireSeconds: "3600"  # 1 hour default
     publicUrl: ""  # External URL for MinIO if different from internal endpoint
 
+# Container command override (optional)
+# Use this to run a different command in the same image (e.g., for MCP server)
+command: []
+  # - python
+  # - mcp_server.py
+
+# Container args override (optional)
+args: []
+
 # Additional environment variables
 extraEnv: []
   # - name: EXTRA_VAR
