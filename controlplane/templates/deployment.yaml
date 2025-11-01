@@ -59,10 +59,10 @@ spec:
           {{- end }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.service.httpPort | default 8000 }}
               protocol: TCP
             - name: grpc
-              containerPort: 50051
+              containerPort: {{ .Values.service.grpcPort | default 50051 }}
               protocol: TCP
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
