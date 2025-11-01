@@ -267,9 +267,11 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           volumeMounts:
+            {{- if .Values.certificates.ca.generate }}
             - name: certificates
               mountPath: /app/certs
               readOnly: true
+            {{- end }}
             {{- if .Values.persistence.enabled }}
             - name: media
               mountPath: /app/media
@@ -278,7 +280,8 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
-        {{- if and .Values.certificates.ca.generate .Values.certificates.ca.useCertManager }}
+        {{- if .Values.certificates.ca.generate }}
+        {{- if .Values.certificates.ca.useCertManager }}
         # cert-manager mode: mount root CA for trust, intermediate CA for signing
         - name: certificates
           projected:
@@ -307,6 +310,7 @@ spec:
               - key: ca.key
                 path: ca.key
                 mode: 0600
+        {{- end }}
         {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: media
