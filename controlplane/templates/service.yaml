@@ -11,10 +11,12 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
+    {{- if ne (.Values.service.httpPort | toString) "0" }}
     - port: {{ .Values.service.httpPort }}
       targetPort: http
       protocol: TCP
       name: http
+    {{- end }}
     {{- if .Values.controlPlane.enableGrpcServer }}
     - port: {{ .Values.service.grpcPort }}
       targetPort: grpc
