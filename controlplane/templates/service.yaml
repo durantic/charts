@@ -44,5 +44,10 @@ spec:
       protocol: TCP
       name: grpc
   selector:
+    {{- if .Values.grpcService.targetReleaseName }}
+    app.kubernetes.io/name: {{ include "durantic.name" . }}
+    app.kubernetes.io/instance: {{ .Values.grpcService.targetReleaseName }}
+    {{- else }}
     {{- include "durantic.selectorLabels" . | nindent 4 }}
+    {{- end }}
 {{- end }}

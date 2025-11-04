@@ -269,7 +269,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           volumeMounts:
-            {{- if .Values.certificates.ca.generate }}
+            {{- if or .Values.certificates.ca.generate .Values.certificates.ca.existingRootCASecret .Values.certificates.ca.existingCASecret .Values.certificates.ca.existingSecret }}
             - name: certificates
               mountPath: /app/certs
               readOnly: true
@@ -282,19 +282,19 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
-        {{- if .Values.certificates.ca.generate }}
-        {{- if .Values.certificates.ca.useCertManager }}
+        {{- if or .Values.certificates.ca.generate .Values.certificates.ca.existingRootCASecret .Values.certificates.ca.existingCASecret .Values.certificates.ca.existingSecret }}
+        {{- if or .Values.certificates.ca.useCertManager .Values.certificates.ca.existingRootCASecret }}
         # cert-manager mode: mount root CA for trust, intermediate CA for signing
         - name: certificates
           projected:
             sources:
               - secret:
-                  name: {{ include "durantic.fullname" . }}-root-ca-secret
+                  name: {{ .Values.certificates.ca.existingRootCASecret | default (printf "%s-root-ca-secret" (include "durantic.fullname" .)) }}
                   items:
                     - key: tls.crt
                       path: root-ca.crt
               - secret:
-                  name: {{ include "durantic.fullname" . }}-ca-secret
+                  name: {{ .Values.certificates.ca.existingCASecret | default (printf "%s-ca-secret" (include "durantic.fullname" .)) }}
                   items:
                     - key: tls.crt
                       path: ca.crt
@@ -305,7 +305,7 @@ spec:
         # Helm genCA mode: reference the main secret
         - name: certificates
           secret:
-            secretName: {{ include "durantic.fullname" . }}
+            secretName: {{ .Values.certificates.ca.existingSecret | default (include "durantic.fullname" .) }}
             items:
               - key: ca.crt
                 path: ca.crt
