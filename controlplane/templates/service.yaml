@@ -1,3 +1,4 @@
+{{- if ne (.Values.service.enabled | toString) "false" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -25,6 +26,7 @@ spec:
     {{- end }}
   selector:
     {{- include "durantic.selectorLabels" . | nindent 4 }}
+{{- end }}
 ---
 {{- if and .Values.grpcService.enabled .Values.controlPlane.enableGrpcServer }}
 apiVersion: v1

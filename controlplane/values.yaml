@@ -52,12 +52,20 @@ django:
     name: "durantic"
     user: "durantic"
     password: ""  # Auto-generated if not provided
-  
+    # Use existing secret for database credentials (optional)
+    existingSecret: ""  # Name of existing secret containing database credentials
+    secretKeys:
+      password: "password"  # Key in secret for database password
+
   # Redis configuration
   redis:
     host: ""  # Uses subchart if empty
     port: "6379"
     password: ""  # Auto-generated if not provided
+    # Use existing secret for redis credentials (optional)
+    existingSecret: ""  # Name of existing secret containing redis credentials
+    secretKeys:
+      password: "password"  # Key in secret for redis password
   
   # Email configuration
   email:
@@ -68,6 +76,11 @@ django:
     user: ""
     password: ""
     defaultFrom: "noreply@example.com"
+    # Use existing secret for email credentials (optional)
+    existingSecret: ""  # Name of existing secret containing email credentials
+    secretKeys:
+      user: "email-user"  # Key in secret for email user
+      password: "email-password"  # Key in secret for email password
   
   # S3/MinIO configuration
   s3:
@@ -107,6 +120,7 @@ extraSecrets: []
 
 # HTTP Service configuration
 service:
+  enabled: true
   type: ClusterIP
   httpPort: 8000
   grpcPort: 50051
