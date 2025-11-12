@@ -64,10 +64,14 @@ spec:
             - name: grpc
               containerPort: {{ .Values.service.grpcPort | default 50051 }}
               protocol: TCP
+          {{- if .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.readinessProbe }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
@@ -184,7 +188,7 @@ spec:
               {{- end }}
             
             # Email settings
-            {{- if .Values.django.email.user }}
+            {{- if or .Values.django.email.user .Values.django.email.existingSecret }}
             - name: EMAIL_BACKEND
               value: {{ .Values.django.email.backend | quote }}
             - name: EMAIL_HOST
@@ -196,13 +200,23 @@ spec:
             - name: EMAIL_HOST_USER
               valueFrom:
                 secretKeyRef:
+                  {{- if .Values.django.email.existingSecret }}
+                  name: {{ .Values.django.email.existingSecret }}
+                  key: {{ .Values.django.email.secretKeys.user | default "email-user" }}
+                  {{- else }}
                   name: {{ include "durantic.fullname" . }}
                   key: email-user
+                  {{- end }}
             - name: EMAIL_HOST_PASSWORD
               valueFrom:
                 secretKeyRef:
+                  {{- if .Values.django.email.existingSecret }}
+                  name: {{ .Values.django.email.existingSecret }}
+                  key: {{ .Values.django.email.secretKeys.password | default "email-password" }}
+                  {{- else }}
                   name: {{ include "durantic.fullname" . }}
                   key: email-password
+                  {{- end }}
             - name: DEFAULT_FROM_EMAIL
               value: {{ .Values.django.email.defaultFrom | quote }}
             {{- end }}
