@@ -79,8 +79,8 @@ spec:
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "durantic.fullname" . }}
-                  key: django-secret-key
+                  name: {{ if and .Values.secrets .Values.secrets.existingSecret }}{{ .Values.secrets.existingSecret }}{{ else }}{{ include "durantic.fullname" . }}{{ end }}
+                  key: {{ if and .Values.secrets .Values.secrets.secretKeys .Values.secrets.secretKeys.djangoSecretKey }}{{ .Values.secrets.secretKeys.djangoSecretKey }}{{ else }}django-secret-key{{ end }}
             - name: DEBUG
               value: {{ .Values.django.debug | quote }}
             - name: ALLOWED_HOSTS
@@ -136,8 +136,8 @@ spec:
             - name: JWE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "durantic.fullname" . }}
-                  key: jwe-key
+                  name: {{ if and .Values.secrets .Values.secrets.existingSecret }}{{ .Values.secrets.existingSecret }}{{ else }}{{ include "durantic.fullname" . }}{{ end }}
+                  key: {{ if and .Values.secrets .Values.secrets.secretKeys .Values.secrets.secretKeys.jweKey }}{{ .Values.secrets.secretKeys.jweKey }}{{ else }}jwe-key{{ end }}
             
             # Database settings
             - name: DB_HOST
