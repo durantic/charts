@@ -46,6 +46,7 @@ Selector labels
 {{- define "durantic.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "durantic.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: {{ .Values.component | quote}}
 {{- end }}
 
 {{/*

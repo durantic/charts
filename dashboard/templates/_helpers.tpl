@@ -48,6 +48,7 @@ Selector labels
 {{- define "dashboard.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "dashboard.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: {{ .Values.component | quote}}
 {{- end }}
 
 {{/*
